@@ -25,7 +25,6 @@ try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host,port))
 except socket.error:
-    print("It seems connection was refused ...")
     sys.exit(1)
 
 
