@@ -5,12 +5,16 @@ import socket
 import sys
 import json
 import time
+import paramiko
+import scp
+import os
 
 
 """
 Algorithm working with the London schedule (from 9am to 6pm)
 In order to ptimize its usage we will use a VPS from 9 to 6 so delete it at 6 and create another one at 8:45 with a 
 bash code that'll be sent through SSH, server 'll be up at 9
+
 """
 
 public_api_keys = "ZLMU7QWYIGPGWB3A"
@@ -20,37 +24,85 @@ financial_array = pandas.DataFrame(dtype="float16", columns=[], index=markets)
 
 port = 8080
 authorization ={
-    'Authorization' : 'Bearer 0b3b5c4386324917981668793e4425e12d2f4dd0863e808203bc8de7fe6c6caf'
+    'Authorization' : 'Bearer 0b3b5c4386324917981668793e4425e12d2f4dd0863e808203bc8de7fe6c6caf',
 }
 
 COEFFSUM = 2
 KEY_TO_USE = 0
 
-droplet = requests.get("https://api.digitalocean.com/v2/droplets",
-                        headers=authorization
-                         ).json()
+# ssh key must already exist
 
- #A voir comment faire si plusieurs droplets
-if droplet["droplets"][0]["status"] != 'active':
-    print("Fatal error -- proxy down please check its state https://cloud.digitalocean.com/droplets/161097457/power?i=869a0e")
-
-    r = requests.post(url="https://api.digitalocean.com/v2/droplets/{}/actions".format(droplet["droplets"][0]["id"],
-                                                                                       headers = authorization,
-                                                                                       data = {
-                                                                                           "type": "power_on"
-                                                                                       }))
-    if r.status_code != 200:
-        print("Impossible d'accéder au serveur -- serveur indispo")
-        sys.exit(1)
+key_id = requests.get("https://api.digitalocean.com/v2/account/keys", headers=authorization).json()["ssh_keys"][0]["id"]
 
 host = "157.245.32.65"
 
-try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((host,port))
-except socket.error:
-    print('Error socket connection with {}'.format(host))
-    sys.exit(1)
+
+def create_droplet_and_get_ip():
+    """
+
+    :return: ip_proxy, id of the new droplet
+    """
+    authorization["Content-type"] = "application/json"
+    data_to_send = {
+        'name': 'vm-droplet-proxy',
+        'region': 'lon1',
+        'size': 's-1vcpu-1gb',
+        'image': 'ubuntu-16-04-x64',
+        'ssh_keys': [key_id],
+        'backups': False,
+        'ipv6': False,
+        'user_data': None,
+        'private_networking': None,
+        'volumes': None,
+        'tags': list()
+    }
+    a = requests.post(url="https://api.digitalocean.com/v2/droplets", headers=authorization,
+                      data = json.dumps(data_to_send))
+
+    if a.status_code == 202:
+        id_droplet = a.json()["droplet"]["id"]
+        time.sleep(5)
+        a = requests.get("https://api.digitalocean.com/v2/droplets/{}".format(id_droplet), headers=authorization)
+        print(a.json())
+        print(a.status_code)
+        if a.status_code == 200:
+            host = a.json()["droplet"]["networks"]["v4"][0]["ip_address"]
+            return host, id_droplet
+
+
+def initialize_proxy(dest):
+    """
+
+    :param dest: ip dest of the proxy server
+    :return: void
+    """
+    current_path = '/'.join(os.path.dirname(os.path.realpath(__file__)).split("\\")[:-1]) + "/proxy/server_config.sh"
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        ssh.connect(dest, username='root', key_filename="C://Users/matth/.ssh/id_rsa.pub")
+        scp_transfer = scp.SCPClient(ssh.get_transport())
+        scp_transfer.put(current_path, "~")
+        _,stdout,_ = ssh.exec_command('pwd')
+        print(stdout.readlines())
+        ssh.close()
+    except paramiko.ssh_exception.BadHostKeyException:
+        print("Erreur lors de la connection SSH : {}".format(paramiko.ssh_exception))
+
+
+def delete_droplet(id):
+    """
+
+    :param id: id concerned by the ongoing closure
+    :return: void
+    """
+    print("Closing droplet id : {}".format(id))
+    a = requests.delete(url = "https://api.digitalocean.com/v2/droplets/{}".format(id),
+                        headers=authorization)
+    if a.status_code == 204:
+        print("Droplet deleted")
+    else:
+        print("Error droplet undeletable")
 
 
 
@@ -88,7 +140,6 @@ def get_MACD(currency):
 
     time_n, time_n_1 = list(MACD.json()['Technical Analysis: MACD'])[0], list(MACD.json()['Technical Analysis: MACD'])[1]
     return MACD.json()['Technical Analysis: MACD'][time_n], MACD.json()['Technical Analysis: MACD'][time_n_1]
-
 
 
 
@@ -154,6 +205,19 @@ def get_MOMENTUM(currency):
     time_n, time_n_1 = list(MOM.json()['Technical Analysis: MOM'])[0], list(MOM.json()['Technical Analysis: MOM'])[1]
     return MOM.json()['Technical Analysis: MOM'][time_n], MOM.json()['Technical Analysis: MOM'][time_n_1]
 
+
+
+ip, droplet_id = create_droplet_and_get_ip()
+initialize_proxy(ip)
+time.sleep(10)
+delete_droplet(droplet_id)
+
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip,port))
+except socket.error:
+    print('Error socket connection with {}'.format(ip))
+    sys.exit(1)
 
 
 if datetime.today().hour in range(0,24): # A coder par apport aux horaires de Londres
