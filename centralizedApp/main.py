@@ -4,10 +4,13 @@ from datetime import datetime
 import socket
 import sys
 import json
+import time
 
 
 """
 Algorithm working with the London schedule (from 9am to 6pm)
+In order to ptimize its usage we will use a VPS from 9 to 6 so delete it at 6 and create another one at 8:45 with a 
+bash code that'll be sent through SSH, server 'll be up at 9
 """
 
 public_api_keys = "ZLMU7QWYIGPGWB3A"
@@ -15,17 +18,41 @@ markets = ["EURUSD", "EURGBP", "GBPUSD"]
 frequency = "15min"
 financial_array = pandas.DataFrame(dtype="float16", columns=[], index=markets)
 
-host = "127.0.0.1"
-port = 8081
+port = 8080
+authorization ={
+    'Authorization' : 'Bearer 0b3b5c4386324917981668793e4425e12d2f4dd0863e808203bc8de7fe6c6caf'
+}
 
 COEFFSUM = 2
 KEY_TO_USE = 0
+
+droplet = requests.get("https://api.digitalocean.com/v2/droplets",
+                        headers=authorization
+                         ).json()
+
+ #A voir comment faire si plusieurs droplets
+if droplet["droplets"][0]["status"] != 'active':
+    print("Fatal error -- proxy down please check its state https://cloud.digitalocean.com/droplets/161097457/power?i=869a0e")
+
+    r = requests.post(url="https://api.digitalocean.com/v2/droplets/{}/actions".format(droplet["droplets"][0]["id"],
+                                                                                       headers = authorization,
+                                                                                       data = {
+                                                                                           "type": "power_on"
+                                                                                       }))
+    if r.status_code != 200:
+        print("Impossible d'accéder au serveur -- serveur indispo")
+        sys.exit(1)
+
+host = "157.245.32.65"
 
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host,port))
 except socket.error:
+    print('Error socket connection with {}'.format(host))
     sys.exit(1)
+
+
 
 
 def reach_server(url_format):
@@ -38,30 +65,32 @@ def reach_server(url_format):
     try:
         s.send(bytes(url_format, "utf-8"))
         full_answer = str()
-        print("Received an answer from the server")
-        resp = s.recv(4096)
         while (True):
-            full_answer += resp.decode("utf-8")
-            if len(resp.decode("utf-8")) != 4096 or resp.decode("utf-8") == str():
-                break
             resp = s.recv(4096)
-        print(json.loads(full_answer))
+            full_answer += resp.decode("utf-8")
+            if "[END]" in resp.decode("utf-8"):
+                break
+        print(json.loads(full_answer.split("[END]")[0]))
         s.close()
 
     except socket.error:
-        print("Server cannot answer...")
-        sys.exit(1)
-
+        pass
 
 
 def get_MACD(currency):
     """
     :return: MACD and all elements, moreover will return MACD and MACD(n-1) to determine it there was a 0 intersection
     """
-    MACD = requests.get("https://www.alphavantage.co/query?function=MACD&symbol={}&interval={}&series_type=open&apikey={}".
-                    format(currency, frequency, public_api_keys))
+    url = "https://www.alphavantage.co/query?function=MACD&symbol={}&interval={}&series_type=open&apikey={}"
+    MACD = requests.get(url=url.format(currency, frequency, public_api_keys))
+    if "Note" in MACD.content.json().keys():
+        MACD = reach_server(url.format(currency, frequency, str()))
+
     time_n, time_n_1 = list(MACD.json()['Technical Analysis: MACD'])[0], list(MACD.json()['Technical Analysis: MACD'])[1]
     return MACD.json()['Technical Analysis: MACD'][time_n], MACD.json()['Technical Analysis: MACD'][time_n_1]
+
+
+
 
 
 def get_STOCHRSI(currency):
@@ -136,10 +165,11 @@ if datetime.today().hour in range(0,24): # A coder par apport aux horaires de Lo
             open_price = financial_data.json()['open']
             financial_array.loc[markets[i], datetime.today().strftime("%d/%m/%y %H:%M")] = open_price
             SAR_relatif = float(get_SAR(markets[i])['SAR']) - float(open_price) #SAR relatif needs to be positive to indicate a long position (othw short)
-            # stoch_n, stoch_n_1 = get_STOCHRSI(markets[i])
-            # buy_coeff, sell_coeff = coeff_STOCHARSI_SAR(stoch_n_1, stoch_n, SAR_relatif)
+            stoch_n, stoch_n_1 = get_STOCHRSI(markets[i])
+            buy_coeff, sell_coeff = coeff_STOCHARSI_SAR(stoch_n_1, stoch_n, SAR_relatif)
             print(buy_coeff, sell_coeff)
-            a = reach_server("https://www.alphavantage.co/query?function=MOM&symbol=EURGBP&interval=15min&time_period=10&series_type=close&apikey=")
+            time.sleep(60) #wait a whole minute
+
 
             # Add rsistochastique condition
 
