@@ -15,26 +15,27 @@ Algorithm working with the London schedule (from 9am to 6pm)
 In order to ptimize its usage we will use a VPS from 9 to 6 so delete it at 6 and create another one at 8:45 with a 
 bash code that'll be sent through SSH, server 'll be up at 9
 
+Private digital ocean key must be put as a environment variable under the name of DIGITAMOCEAN_KEY
+
 """
 
 public_api_keys = "ZLMU7QWYIGPGWB3A"
+
 markets = ["EURUSD", "EURGBP", "GBPUSD"]
 frequency = "15min"
 financial_array = pandas.DataFrame(dtype="float16", columns=[], index=markets)
+digital_ocean_key = os.environ.get("DIGITALOCEAN_KEY")
+print(digital_ocean_key)
 
 port = 8080
-authorization ={
-    'Authorization' : 'Bearer 0b3b5c4386324917981668793e4425e12d2f4dd0863e808203bc8de7fe6c6caf',
-}
 
-COEFFSUM = 2
-KEY_TO_USE = 0
+authorization ={
+    'Authorization' : 'Bearer {}'.format(digital_ocean_key),
+}
 
 # ssh key must already exist
 
 key_id = requests.get("https://api.digitalocean.com/v2/account/keys", headers=authorization).json()["ssh_keys"][0]["id"]
-
-host = "157.245.32.65"
 
 
 def create_droplet_and_get_ip():
@@ -83,8 +84,7 @@ def initialize_proxy(dest):
         ssh.connect(dest, username='root', key_filename="C://Users/matth/.ssh/id_rsa.pub")
         scp_transfer = scp.SCPClient(ssh.get_transport())
         scp_transfer.put(current_path, "~")
-        _,stdout,_ = ssh.exec_command('pwd')
-        print(stdout.readlines())
+        _,_,_ = ssh.exec_command("sh server_config.sh")
         ssh.close()
     except paramiko.ssh_exception.BadHostKeyException:
         print("Erreur lors de la connection SSH : {}".format(paramiko.ssh_exception))
@@ -208,9 +208,8 @@ def get_MOMENTUM(currency):
 
 
 ip, droplet_id = create_droplet_and_get_ip()
+time.sleep(45)
 initialize_proxy(ip)
-time.sleep(10)
-delete_droplet(droplet_id)
 
 try:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
