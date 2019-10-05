@@ -59,13 +59,15 @@ def create_droplet_and_get_ip():
 
     if a.status_code == 202:
         id_droplet = a.json()["droplet"]["id"]
-        time.sleep(5)
-        a = requests.get("https://api.digitalocean.com/v2/droplets/{}".format(id_droplet), headers=authorization)
-        print(a.json())
-        print(a.status_code)
-        if a.status_code == 200:
-            host = a.json()["droplet"]["networks"]["v4"][0]["ip_address"]
-            return host, id_droplet
+        while True:
+            a = requests.get("https://api.digitalocean.com/v2/droplets/{}".format(id_droplet), headers=authorization)
+            if a.status_code == 200:
+                try:
+                    host = a.json()["droplet"]["networks"]["v4"][0]["ip_address"]
+                    return host, id_droplet
+                except IndexError:
+                    pass
+            time.sleep(20)
 
 
 def initialize_proxy(dest):
@@ -361,10 +363,17 @@ while True:
 
             on = True
             all_threads = [threading.Thread(target=thread_postions, args=(markets[i], files_lock, on)) for i in range(len(markets))]
+            launch_start = False
+            while not launch_start:
+                if datetime.today().second not in [i for i in range(4)]:
+                    time.sleep(1)
+                else:
+                    launch_start = True
             for i in range(0,len(markets)-3,2):
                 all_threads[i].start()
+                time.sleep(20)
                 all_threads[i+1].start()
-                time.sleep(70)
+                time.sleep(50)
 
             break
         else:
@@ -373,7 +382,7 @@ while True:
     while datetime.today().hour < 17:
         time.sleep(25*60)
     on = False
-    for t in all_threads: t.join()
+    # for t in all_threads: t.join()
     end_market(droplet_id)
     print('End of the day at : {}'.format(datetime.today().strftime("%d/%m/%y %H:%M")))
 
