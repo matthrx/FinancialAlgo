@@ -8,7 +8,7 @@ SERVER_KEY = "LFSUNM00DGGW2NVC"
 # TCP connection from the central server
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
-    s.listen(1)
+    s.listen(2)
     conn,_ = s.accept()
     with conn:
         while True:
