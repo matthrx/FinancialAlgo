@@ -2,7 +2,7 @@ import socket
 import requests
 
 HOST = "0.0.0.0"
-PORT = 60000
+PORT = 8080
 SERVER_KEY = "LFSUNM00DGGW2NVC"
 
 # TCP connection from the central server
