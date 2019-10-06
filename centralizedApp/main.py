@@ -29,6 +29,7 @@ authorization ={
 }
 all_files = list()
 files_lock = threading.Lock()
+socket_lock = threading.Lock()
 
 # ssh key must already exist
 
@@ -123,10 +124,7 @@ def reach_server(url_format):
             resp = s.recv(4096)
             full_answer += resp.decode("utf-8")
             if "[END]" in resp.decode("utf-8"):
-                print("End of current trasmission,")
                 break
-        s.close()
-        print(json.loads(full_answer.split("[END]")[0]))
         return json.loads(full_answer.split("[END]")[0])
 
     except socket.error:
@@ -170,7 +168,6 @@ def is_range_ADX(currency):
     ADX = requests.get(url=url.format(currency, frequency, public_api_keys)).json()
     if api_over(ADX):
         ADX = reach_server(url.format(currency, frequency, str()))
-        print("ADX proxy : {}".format(ADX))
         if api_over(ADX):
             time.sleep(15)
             return is_range_ADX(currency)
@@ -186,14 +183,13 @@ def get_STOCH(currency):
     :return: %K and %D (or delta between both) + info if overzone.
     Might wait two values to leave
     """
-    url = "https://www.alphavantage.co/query?function=STOCH&symbol={}&interval={}&fastkperiod=14&fastdmatype=3&apikey={}"
+    url = "https://www.alphavantage.co/query?function=STOCH&symbol={}&interval={}&Slowkperiod=14&Slowdmatype=3&apikey={}"
     STOCHRSI = requests.get(url.format(currency, frequency, public_api_keys)).json()
     if api_over(STOCHRSI):
         STOCHRSI = reach_server(url.format(currency, frequency, str()))
         if api_over(STOCHRSI):
             time.sleep(15)
             return get_STOCH(currency)
-
     time_n, time_n_1 = list(STOCHRSI['Technical Analysis: STOCH'])[0], list(STOCHRSI['Technical Analysis: STOCH'])[1]
     return STOCHRSI['Technical Analysis: STOCH'][time_n], STOCHRSI['Technical Analysis: STOCH'][time_n_1]
 
@@ -210,19 +206,19 @@ def coeff_STOCH_SAR(value_n_1, value_n, SAR_relatif, is_range=False):
     buy_coeff, sell_coeff = float(), float()
     quit_overzone=1.5
     if not is_range:
-        FastD_n_1, FastK_n, FastK_n_1, FastD_n = \
-            float(value_n_1['FastD']), float(value_n['FastK']),float(value_n_1['FastK']), float(value_n["FastD"])
-        overbought_zone = FastK_n>=80 and FastK_n_1 >= 80
-        oversold_zone = FastK_n<=20 and FastK_n_1 <=20
+        SlowD_n_1, SlowK_n, SlowK_n_1, SlowD_n = \
+            float(value_n_1['SlowD']), float(value_n['SlowK']),float(value_n_1['SlowK']), float(value_n["SlowD"])
+        overbought_zone = SlowK_n>=80 and SlowK_n_1 >= 80
+        oversold_zone = SlowK_n<=20 and SlowK_n_1 <=20
         if overbought_zone or oversold_zone:
             return 0,0
-        if FastK_n > 20 and FastK_n_1 <= 20: return quit_overzone, sell_coeff
-        elif FastK_n_1 >= 80 and FastK_n < 80: return buy_coeff, quit_overzone
-        if FastD_n > 50 and FastK_n > 50 : buy_coeff += 0.25
+        if SlowK_n > 20 and SlowK_n_1 <= 20: return quit_overzone, sell_coeff
+        elif SlowK_n_1 >= 80 and SlowK_n < 80: return buy_coeff, quit_overzone
+        if SlowD_n > 50 and SlowK_n > 50 : buy_coeff += 0.25
         else: sell_coeff += 0.25
-        if FastK_n_1<=FastD_n_1 and FastK_n>FastD_n and SAR_relatif < 0 : buy_coeff += 2
+        if SlowK_n_1<=SlowD_n_1 and SlowK_n>SlowD_n and SAR_relatif < 0 : buy_coeff += 2
         # may be add condition to declare a sell even though SAR isn't also negative to optimize
-        elif FastK_n_1>= FastD_n_1 and FastK_n<FastD_n and SAR_relatif > 0: sell_coeff += 2
+        elif SlowK_n_1>= SlowD_n_1 and SlowK_n<SlowD_n and SAR_relatif > 0: sell_coeff += 2
     return buy_coeff, sell_coeff
 
 
@@ -283,18 +279,17 @@ Functionning on a market every minute (to optimize api request)
     # TO DO
 
 
-def thread_postions(market, lock, on=True):
+def thread_postions(market, fileslock, socket_lock,  on=True):
     """
 
     :param market:
     :param on:
     :return:
     """
-    print("Launching thread")
     a = os.getcwd().split("\\")
     resume_file = open("{}\\result_files\\{}.txt".format('\\'.join(a[0:len(a)-1]),
                                                     market), 'a+')
-    with lock:
+    with fileslock:
         all_files.append(resume_file)
     has_bought, has_sold = False, False
     price_entrance = float()
@@ -305,14 +300,14 @@ def thread_postions(market, lock, on=True):
                                       .format(market))
         if financial_data.status_code == 200:
             current_price = financial_data.json()['bid']
+            socket_lock.acquire()
             is_range = is_range_ADX(market)
             SAR_relatif = float(get_SAR(market)['SAR']) - float(current_price) #SAR relatif needs to be positive to indicate a long position (othw short)
             stoch_n, stoch_n_1 = get_STOCH(market)
             buy_coeff, sell_coeff = tuple(map(lambda x,y,z : x+y+z, get_info_MOMENTUM(market, SAR_relatif, is_range),
                                               coeff_STOCH_SAR(stoch_n_1, stoch_n, SAR_relatif, is_range),
                                               get_MACD(market, is_range)))
-
-            print("End of calls")
+            socket_lock.release()
             if no_position:
                 if buy_coeff >= necessary_value:
                     has_bought = True
@@ -336,7 +331,6 @@ def thread_postions(market, lock, on=True):
                         resume_file.write("---- left at {} ---> result {}% \n".format(
                             datetime.today().strftime("%d/%m/%y %H:%M"),
                             (price_entrance - current_price) / price_entrance))
-
             time.sleep(15*60) #wait 15 minutes
 
 
@@ -347,18 +341,18 @@ def end_market(droplet_id):
     """
     for f in all_files: f.close()
     delete_droplet(droplet_id)
+    s.close()
 
 
 
 while True:
     while True:
-        if datetime.today().hour >= 9:
-            # ip, droplet_id = create_droplet_and_get_ip()
-            # time.sleep(60)
-            ip = "209.97.184.185"
-            # initialize_proxy(ip)
+        if datetime.today().hour >= 9 and datetime.today().hour < 17:
+            ip, droplet_id = create_droplet_and_get_ip()
+            time.sleep(60)
+            initialize_proxy(ip)
             while True:
-                # time.sleep(30)
+                time.sleep(15)
                 try:
                     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     s.connect((ip,port))
@@ -367,7 +361,8 @@ while True:
                     print('Error socket connection with {}'.format(ip))
                     os.error(1)
             on = True
-            all_threads = [threading.Thread(target=thread_postions, args=(markets[i], files_lock, on)) for i in range(len(markets))]
+            all_threads = [threading.Thread(target=thread_postions, args=(markets[i], files_lock, socket_lock,
+                                                                          on)) for i in range(len(markets))]
             launch_start = False
             while not launch_start:
                 if datetime.today().second not in [i for i in range(4)]:
