@@ -81,8 +81,13 @@ def initialize_proxy(dest):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         ssh.connect(dest, username='root', key_filename="C://Users/matth/.ssh/id_rsa.pub")
-        _,_,_ = ssh.exec_command("git clone {}".format(github_repositoy))
-        _,_,_ = ssh.exec_command("sh FinancialAlgo/proxy/server_config.sh")
+        _,stdout,_ = ssh.exec_command("git clone {}".format(github_repositoy))
+        clone_status = stdout.channel.recv_exit_status()
+        if clone_status == 0:
+            _,_,_ = ssh.exec_command("sh FinancialAlgo/proxy/server_config.sh")
+        else:
+            print("Clone impossible")
+            os.error()
         ssh.close()
     except paramiko.ssh_exception.BadHostKeyException:
         print("Erreur lors de la connection SSH : {}".format(paramiko.ssh_exception))
@@ -118,8 +123,10 @@ def reach_server(url_format):
             resp = s.recv(4096)
             full_answer += resp.decode("utf-8")
             if "[END]" in resp.decode("utf-8"):
+                print("End of current trasmission,")
                 break
         s.close()
+        print(json.loads(full_answer.split("[END]")[0]))
         return json.loads(full_answer.split("[END]")[0])
 
     except socket.error:
@@ -127,7 +134,7 @@ def reach_server(url_format):
 
 
 def api_over(message_content):
-    return "Note" in message_content.json().keys()
+    return "Note" in message_content.keys()
 
 
 def get_MACD(currency, is_range=False):
@@ -136,20 +143,16 @@ def get_MACD(currency, is_range=False):
     """
     macd_coeff = 1 if is_range else 1.5
     url = "https://www.alphavantage.co/query?function=MACD&symbol={}&interval={}&series_type=open&apikey={}"
-    MACD = requests.get(url=url.format(currency, frequency, public_api_keys))
-    print(MACD.json())
+    MACD = requests.get(url=url.format(currency, frequency, public_api_keys)).json()
     if api_over(MACD):
         MACD = reach_server(url.format(currency, frequency, str()))
         if api_over(MACD):
                 time.sleep(15)
                 return get_MACD(currency)
 
-    time_n, time_n_1 = list(MACD.json()['Technical Analysis: MACD'])[0], list(MACD.json()['Technical Analysis: MACD'])[1]
-    print(time_n)
-    macd_n, macd_n_1 = float(MACD.json()['Technical Analysis: MACD'][time_n]['MACD_Hist']), \
-                     float(MACD.json()['Technical Analysis: MACD'][time_n_1]['MACD_Hist'])
-    print(macd_n, macd_n_1)
-    print("Spotting")
+    time_n, time_n_1 = list(MACD['Technical Analysis: MACD'])[0], list(MACD['Technical Analysis: MACD'])[1]
+    macd_n, macd_n_1 = float(MACD['Technical Analysis: MACD'][time_n]['MACD_Hist']), \
+                     float(MACD['Technical Analysis: MACD'][time_n_1]['MACD_Hist'])
     if macd_n > 0 and macd_n_1 <= 0: return (macd_coeff ,0)
     elif macd_n_1 <=0 and macd_n > 0: return (0, macd_coeff)
     elif macd_n > 0: return (0.25*macd_coeff,0)
@@ -164,35 +167,35 @@ def is_range_ADX(currency):
     keep position
     """
     url= "https://www.alphavantage.co/query?function=ADX&symbol={}&interval={}&time_period=14&apikey={}"
-    ADX = requests.get(url=url.format(currency, frequency, public_api_keys))
+    ADX = requests.get(url=url.format(currency, frequency, public_api_keys)).json()
     if api_over(ADX):
         ADX = reach_server(url.format(currency, frequency, str()))
+        print("ADX proxy : {}".format(ADX))
         if api_over(ADX):
             time.sleep(15)
             return is_range_ADX(currency)
 
-    print(ADX.json())
-    time_n = list(ADX.json()['Technical Analysis: ADX'])[0]
-    ADX_n = float(ADX.json()['Technical Analysis: ADX'][time_n]['ADX'])
-    return float(ADX_n) <= adx_limit
+    time_n = list(ADX['Technical Analysis: ADX'])[0]
+    ADX_n = float(ADX['Technical Analysis: ADX'][time_n]['ADX'])
+    return ADX_n <= adx_limit
 
 
-def get_STOCH(currency, ):
+def get_STOCH(currency):
     """
 
     :return: %K and %D (or delta between both) + info if overzone.
     Might wait two values to leave
     """
     url = "https://www.alphavantage.co/query?function=STOCH&symbol={}&interval={}&fastkperiod=14&fastdmatype=3&apikey={}"
-    STOCHRSI = requests.get(url.format(currency, frequency, public_api_keys))
+    STOCHRSI = requests.get(url.format(currency, frequency, public_api_keys)).json()
     if api_over(STOCHRSI):
         STOCHRSI = reach_server(url.format(currency, frequency, str()))
         if api_over(STOCHRSI):
             time.sleep(15)
             return get_STOCH(currency)
 
-    time_n, time_n_1 = list(STOCHRSI.json()['Technical Analysis: STOCH'])[0], list(STOCHRSI.json()['Technical Analysis: STOCH'])[1]
-    return STOCHRSI.json()['Technical Analysis: STOCH'][time_n], STOCHRSI.json()['Technical Analysis: STOCH'][time_n_1]
+    time_n, time_n_1 = list(STOCHRSI['Technical Analysis: STOCH'])[0], list(STOCHRSI['Technical Analysis: STOCH'])[1]
+    return STOCHRSI['Technical Analysis: STOCH'][time_n], STOCHRSI['Technical Analysis: STOCH'][time_n_1]
 
 
 
@@ -209,7 +212,6 @@ def coeff_STOCH_SAR(value_n_1, value_n, SAR_relatif, is_range=False):
     if not is_range:
         FastD_n_1, FastK_n, FastK_n_1, FastD_n = \
             float(value_n_1['FastD']), float(value_n['FastK']),float(value_n_1['FastK']), float(value_n["FastD"])
-        print("Etat du %K (stochastique) en n-1 et N : {},{}".format(FastK_n, FastK_n_1))
         overbought_zone = FastK_n>=80 and FastK_n_1 >= 80
         oversold_zone = FastK_n<=20 and FastK_n_1 <=20
         if overbought_zone or oversold_zone:
@@ -231,14 +233,14 @@ def get_SAR(currency):
     :return: parabolic SAR value
     """
     url = "https://www.alphavantage.co/query?function=SAR&symbol={}&interval={}&acceleration=0.05&maximum=0.25&apikey={}"
-    SAR = requests.get(url.format(currency, frequency, public_api_keys))
+    SAR = requests.get(url.format(currency, frequency, public_api_keys)).json()
     if api_over(SAR):
         SAR = reach_server(url.format(currency, frequency, str()))
         if api_over(SAR):
             time.sleep(20)
             return get_SAR(currency)
-    time_studied = list(SAR.json()["Technical Analysis: SAR"])[0]
-    return SAR.json()["Technical Analysis: SAR"][time_studied]
+    time_studied = list(SAR["Technical Analysis: SAR"])[0]
+    return SAR["Technical Analysis: SAR"][time_studied]
 
 
 
@@ -250,16 +252,16 @@ def get_info_MOMENTUM(currency,  SAR_value,  is_range=False):
     mom_value = 2 if is_range else 1
     buy_coeff, sell_coeff = float(), float()
     url = "https://www.alphavantage.co/query?function=MOM&symbol={}&interval={}&time_period=10&series_type=close&apikey={}"
-    MOM = requests.get(url.format(currency, frequency, public_api_keys))
+    MOM = requests.get(url.format(currency, frequency, public_api_keys)).json()
     if api_over(MOM):
         MOM = reach_server(url.format(currency, frequency, str()))
         if api_over(MOM):
             time.sleep(15)
             return get_info_MOMENTUM(currency, is_range, SAR_value)
 
-    time_n, time_n_1 = list(MOM.json()['Technical Analysis: MOM'])[0], list(MOM.json()['Technical Analysis: MOM'])[1]
-    mom_n, mom_n_1 = float(MOM.json()['Technical Analysis: MOM'][time_n]['MOM']), \
-                         float(MOM.json()['Technical Analysis: MOM'][time_n_1]['MOM'])
+    time_n, time_n_1 = list(MOM['Technical Analysis: MOM'])[0], list(MOM['Technical Analysis: MOM'])[1]
+    mom_n, mom_n_1 = float(MOM['Technical Analysis: MOM'][time_n]['MOM']), \
+                         float(MOM['Technical Analysis: MOM'][time_n_1]['MOM'])
     if not is_range:
         if mom_n >= 0 and mom_n_1 <=0: buy_coeff = mom_value
         elif mom_n <=0 and mom_n_1 >= 0: sell_coeff = mom_value
@@ -289,7 +291,8 @@ def thread_postions(market, lock, on=True):
     :return:
     """
     print("Launching thread")
-    resume_file = open("{}\\result_files\\{}.txt".format(''.join(os.getcwd().split()[0:len(os.getcwd())-1]),
+    a = os.getcwd().split("\\")
+    resume_file = open("{}\\result_files\\{}.txt".format('\\'.join(a[0:len(a)-1]),
                                                     market), 'a+')
     with lock:
         all_files.append(resume_file)
@@ -302,13 +305,14 @@ def thread_postions(market, lock, on=True):
                                       .format(market))
         if financial_data.status_code == 200:
             current_price = financial_data.json()['bid']
-            is_range = is_range_ADX(markets)
+            is_range = is_range_ADX(market)
             SAR_relatif = float(get_SAR(market)['SAR']) - float(current_price) #SAR relatif needs to be positive to indicate a long position (othw short)
             stoch_n, stoch_n_1 = get_STOCH(market)
             buy_coeff, sell_coeff = tuple(map(lambda x,y,z : x+y+z, get_info_MOMENTUM(market, SAR_relatif, is_range),
                                               coeff_STOCH_SAR(stoch_n_1, stoch_n, SAR_relatif, is_range),
                                               get_MACD(market, is_range)))
 
+            print("End of calls")
             if no_position:
                 if buy_coeff >= necessary_value:
                     has_bought = True
@@ -349,18 +353,19 @@ def end_market(droplet_id):
 while True:
     while True:
         if datetime.today().hour >= 9:
-            ip, droplet_id = create_droplet_and_get_ip()
-            print(ip)
-            time.sleep(60)
-            initialize_proxy(ip)
-
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((ip,port))
-            except socket.error:
-                print('Error socket connection with {}'.format(ip))
-                os.error(1)
-
+            # ip, droplet_id = create_droplet_and_get_ip()
+            # time.sleep(60)
+            ip = "209.97.184.185"
+            # initialize_proxy(ip)
+            while True:
+                # time.sleep(30)
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.connect((ip,port))
+                    break
+                except socket.error:
+                    print('Error socket connection with {}'.format(ip))
+                    os.error(1)
             on = True
             all_threads = [threading.Thread(target=thread_postions, args=(markets[i], files_lock, on)) for i in range(len(markets))]
             launch_start = False
@@ -369,20 +374,18 @@ while True:
                     time.sleep(1)
                 else:
                     launch_start = True
-            for i in range(0,len(markets)-3,2):
+            for i in range(0,len(markets),2):
                 all_threads[i].start()
-                time.sleep(20)
                 all_threads[i+1].start()
-                time.sleep(50)
+                time.sleep(65)
 
             break
         else:
             time.sleep(25*60)
-    print("Currently working...")
     while datetime.today().hour < 17:
         time.sleep(25*60)
     on = False
-    # for t in all_threads: t.join()
+    for t in all_threads: t.join()
     end_market(droplet_id)
     print('End of the day at : {}'.format(datetime.today().strftime("%d/%m/%y %H:%M")))
 
