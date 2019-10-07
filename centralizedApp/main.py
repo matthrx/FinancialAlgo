@@ -279,7 +279,7 @@ Functionning on a market every minute (to optimize api request)
     # TO DO
 
 
-def thread_postions(market, fileslock, socket_lock,  on=True):
+def thread_postions(market, socket_lock,  on=True):
     """
 
     :param market:
@@ -287,19 +287,15 @@ def thread_postions(market, fileslock, socket_lock,  on=True):
     :return:
     """
     a = os.getcwd().split("\\")
-    resume_file = open("{}\\result_files\\{}.txt".format('\\'.join(a[0:len(a)-1]),
-                                                    market), 'a+')
-    with fileslock:
-        all_files.append(resume_file)
     has_bought, has_sold = False, False
     price_entrance = float()
     while on:
-        no_position = not has_bought and not has_sold
+        no_position = not(has_bought^has_sold)
 
         financial_data = requests.get("https://financialmodellingprep.com/api/v3/forex/{}"
                                       .format(market))
         if financial_data.status_code == 200:
-            current_price = financial_data.json()['bid']
+            current_price = float(financial_data.json()['bid'])
             socket_lock.acquire()
             is_range = is_range_ADX(market)
             SAR_relatif = float(get_SAR(market)['SAR']) - float(current_price) #SAR relatif needs to be positive to indicate a long position (othw short)
@@ -308,6 +304,8 @@ def thread_postions(market, fileslock, socket_lock,  on=True):
                                               coeff_STOCH_SAR(stoch_n_1, stoch_n, SAR_relatif, is_range),
                                               get_MACD(market, is_range)))
             socket_lock.release()
+            resume_file = open("{}\\result_files\\{}.txt".format('\\'.join(a[0:len(a) - 1]),
+                                                                 market), 'a+')
             if no_position:
                 if buy_coeff >= necessary_value:
                     has_bought = True
@@ -331,15 +329,15 @@ def thread_postions(market, fileslock, socket_lock,  on=True):
                         resume_file.write("---- left at {} ---> result {}% \n".format(
                             datetime.today().strftime("%d/%m/%y %H:%M"),
                             (price_entrance - current_price) / price_entrance))
+            resume_file.close()
             time.sleep(15*60) #wait 15 minutes
 
 
 def end_market(droplet_id):
     """
-    close all files + remove droplet
+    remove droplet
     :return: nothing
     """
-    for f in all_files: f.close()
     delete_droplet(droplet_id)
     s.close()
 
@@ -358,8 +356,7 @@ while True:
                     s.connect((ip,port))
                     break
                 except socket.error:
-                    print('Error socket connection with {}'.format(ip))
-                    os.error(1)
+                    pass
             on = True
             all_threads = [threading.Thread(target=thread_postions, args=(markets[i], files_lock, socket_lock,
                                                                           on)) for i in range(len(markets))]
@@ -376,7 +373,7 @@ while True:
 
             break
         else:
-            time.sleep(25*60)
+            time.sleep(20*60)
     while datetime.today().hour < 17:
         time.sleep(25*60)
     on = False
