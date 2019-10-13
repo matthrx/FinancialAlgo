@@ -6,8 +6,9 @@ import json
 import time
 import paramiko
 import os
+from centralizedApp.api.models import Position
 from sqlalchemy import create_engine
-from  sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 """
