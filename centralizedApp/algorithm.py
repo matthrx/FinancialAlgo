@@ -19,7 +19,8 @@ bash code that'll be sent through SSH, server 'll be up at 9
 Private digital ocean key must be put as a environment variable under the name of DIGITAMOCEAN_KEY
  TO DO //Implement SMS API to receive information at the end of the day.
 """
-DB_URI = 'sqlite:///./main.db'
+
+DB_URI = 'sqlite:///./position.db'
 Base = declarative_base()
 engine = create_engine(DB_URI)
 Base.metadata.drop_all(engine)
@@ -329,12 +330,19 @@ class FinancialAlgothimBackend:
                             position_to_leave = db_session.query(Position).get(self.id_api)
                             position_to_leave['stepout_market'] = datetime.datetime.now()
                             position_to_leave['result_percent'] = 100*(current_price - price_entrance)/price_entrance
+                            db_session.add(position_to_leave)
+                            db_session.commit()
                             print("Buy left by {}".format(market))
                             has_bought = False
                             resume_file.write("---- left at {} ---> result {}% \n".format(
                                 datetime.datetime.today().strftime("%d/%m/%y %H:%M"),
                                 100 * (current_price - price_entrance) / price_entrance))
                     elif has_sold:
+                        position_to_leave = db_session.query(Position).get(self.id_api)
+                        position_to_leave['stepout_market'] = datetime.datetime.now()
+                        position_to_leave['result_percent'] = -100 *(current_price - price_entrance)/ price_entrance
+                        db_session.add(position_to_leave)
+                        db_session.commit()
                         if sell_coeff <= self.necessary_value / 2:
                             print("Sold left by {}".format(market))
                             has_sold = False
@@ -396,7 +404,7 @@ class FinancialAlgothimBackend:
         while True:
             while True:
                 date = datetime.datetime.now()
-                if date.minute > 20 and date.minute < 45 :
+                if date.hour >= 9 and date.hour < 17 :
                     print("London opens...")
                     ip, droplet_id = self.create_droplet_and_get_ip()
                     time.sleep(60)

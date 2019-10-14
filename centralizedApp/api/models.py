@@ -1,19 +1,13 @@
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import DateTime
-from sqlalchemy import Float
-from  sqlalchemy.ext.declarative import declarative_base
+from centralizedApp.api.config import db
 
-Base = declarative_base()
-
-class Position(Base):
+class Position(db.Model):
     __tablename__ = "position"
 
-    id = Column(Integer, primary_key=True)
-    position_type = Column(String)
-    market = Column(String(6))
-    stepin_market = Column(DateTime)
-    stepout_market = Column(DateTime, default= None)
-    stepin_value = Column(Float(precision='3,8'))
-    result_percent = Column(Float(precision='2,4'))
+    id = db.Column(db.Integer, primary_key=True)
+    position_type = db.Column(db.String)
+    market = db.Column(db.String(6))
+    stepin_market = db.Column(db.DateTime)
+    dayout_market = db.Column(db.Date, default= None)
+    timeout_market = db.Column(db.Time, default=None)
+    stepin_value = db.Column(db.Float(precision='3,8'))
+    result_percent = db.Column(db.Float(precision='2,4'), default=0.0)
