@@ -7,9 +7,8 @@ import time
 import paramiko
 import os
 from centralizedApp.api.models import Position
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from centralizedApp.api.config import db
+import time
 
 """
 Algorithm working with the London schedule (from 9am to 6pm)
@@ -19,16 +18,6 @@ bash code that'll be sent through SSH, server 'll be up at 9
 Private digital ocean key must be put as a environment variable under the name of DIGITAMOCEAN_KEY
  TO DO //Implement SMS API to receive information at the end of the day.
 """
-
-DB_URI = 'sqlite:///./position.db'
-Base = declarative_base()
-engine = create_engine(DB_URI)
-Base.metadata.drop_all(engine)
-Base.metadata.create_all(engine)
-
-Session = sessionmaker(bind=engine)
-Session.configure()
-db_session = Session()
 
 
 def reach_server(url_format):
@@ -327,22 +316,27 @@ class FinancialAlgothimBackend:
                 if not no_position:
                     if has_bought:
                         if buy_coeff <= self.necessary_value / 2:
-                            position_to_leave = db_session.query(Position).get(self.id_api)
-                            position_to_leave['stepout_market'] = datetime.datetime.now()
-                            position_to_leave['result_percent'] = 100*(current_price - price_entrance)/price_entrance
-                            db_session.add(position_to_leave)
-                            db_session.commit()
+                            position_to_leave = Position.query.filter(market==market).last()
+                            date = datetime.datetime.now()
+
+                            position_to_leave.dayout_market = datetime.date.today()
+                            position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
+                                                                                second=date.second)
+                            position_to_leave.result_percent = 100*(current_price - price_entrance)/price_entrance
+                            db.session.commit()
                             print("Buy left by {}".format(market))
                             has_bought = False
                             resume_file.write("---- left at {} ---> result {}% \n".format(
                                 datetime.datetime.today().strftime("%d/%m/%y %H:%M"),
                                 100 * (current_price - price_entrance) / price_entrance))
                     elif has_sold:
-                        position_to_leave = db_session.query(Position).get(self.id_api)
-                        position_to_leave['stepout_market'] = datetime.datetime.now()
-                        position_to_leave['result_percent'] = -100 *(current_price - price_entrance)/ price_entrance
-                        db_session.add(position_to_leave)
-                        db_session.commit()
+                        position_to_leave = Position.query.filter(market==market).last()
+                        date = datetime.datetime.now()
+                        position_to_leave.dayout_market = datetime.date.today()
+                        position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
+                                                                            second=date.second)
+                        position_to_leave.result_percent = -100 *(current_price - price_entrance)/ price_entrance
+                        db.session.commit()
                         if sell_coeff <= self.necessary_value / 2:
                             print("Sold left by {}".format(market))
                             has_sold = False
@@ -351,38 +345,32 @@ class FinancialAlgothimBackend:
                                 100 * (price_entrance - current_price) / price_entrance))
                 else:
                     if buy_coeff >= self.necessary_value:
-                        with self.mutex_api:
-                            self.id_api += 1
                         position = Position(
-                            id=self.id_api,
                             position_type="B",
                             market=market,
                             stepin_market= datetime.datetime.today(),
                             stepin_value=current_price,
                         )
-                        db_session.add(position)
-                        db_session.commit()
+                        db.session.add(position)
+                        db.session.commit()
                         has_bought = True
                         resume_file.write("++ Position taken at {} ".format(datetime.datetime.today().strftime("%d/%m/%y %H:%M")))
                         price_entrance = current_price
                     # might need an id as a global value with a mutex (same thing for the interaction with the db_session)
                     elif sell_coeff >= self.necessary_value:
-                        with self.mutex_api:
-                            self.id_api += 1
+
                         position = Position(
-                            id=self.id_api,
                             position_type="S",
                             market=market,
                             stepin_market=datetime.datetime.today(),
                             stepin_value=current_price,
                         )
-                        db_session.add(position)
-                        db_session.commit()
+                        db.session.add(position)
+                        db.session.commit()
                         print("Sell taken by {}".format(market))
                         has_sold = True
                         resume_file.write("-- Position taken at: {} ".format(datetime.datetime.today().strftime("%d/%m/%y %H:%M")))
                         price_entrance = current_price
-
 
                 resume_file.close()
                 time.sleep(15*60) #wait 15 minutes
@@ -404,7 +392,7 @@ class FinancialAlgothimBackend:
         while True:
             while True:
                 date = datetime.datetime.now()
-                if date.hour >= 9 and date.hour < 17 :
+                if date.hour >= 0 and date.hour < 17 :
                     print("London opens...")
                     ip, droplet_id = self.create_droplet_and_get_ip()
                     time.sleep(60)

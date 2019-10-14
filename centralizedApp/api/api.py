@@ -20,5 +20,5 @@ if __name__ == "__main__":
         db.create_all()
     except:
         pass
-    # threading.Thread(target=run_algorithm).start()
+    threading.Thread(target=run_algorithm).start()
     app.run(debug=True, port=8000)

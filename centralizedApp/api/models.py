@@ -3,7 +3,7 @@ from centralizedApp.api.config import db
 class Position(db.Model):
     __tablename__ = "position"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     position_type = db.Column(db.String)
     market = db.Column(db.String(6))
     stepin_market = db.Column(db.DateTime)
