@@ -1,4 +1,4 @@
-from centralizedApp.api.config import db
+from back.centralizedApp.api.config import db
 
 class Position(db.Model):
     __tablename__ = "position"

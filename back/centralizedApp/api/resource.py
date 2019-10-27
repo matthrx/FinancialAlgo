@@ -1,15 +1,9 @@
-from centralizedApp.api.models import Position
-from sqlalchemy import func
+from back.centralizedApp.api.models import Position
 from flask_restful import reqparse
 from flask_restful import abort
 from flask_restful import fields
 from flask_restful import Resource
 from flask_restful import marshal_with
-from sqlalchemy import create_engine
-from  sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from centralizedApp.api.config import db
-from datetime import datetime
 
 # DB_URI = 'sqlite:///./position.db'
 # Base = declarative_base()

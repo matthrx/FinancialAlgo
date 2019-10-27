@@ -3,11 +3,10 @@ import datetime
 import socket
 import threading
 import json
-import time
 import paramiko
 import os
-from centralizedApp.api.models import Position
-from centralizedApp.api.config import db
+from back.centralizedApp.api.models import Position
+from back.centralizedApp.api.config import db
 import time
 
 """
@@ -20,13 +19,12 @@ Private digital ocean key must be put as a environment variable under the name o
 """
 
 
-def reach_server(url_format):
+def reach_server(url_format,s):
     """
 
     :param url_format: url to reach through our proxy
     :return: json format of the response
     """
-    global s
     try:
         s.send(bytes(url_format, "utf-8"))
         full_answer = str()
@@ -180,7 +178,7 @@ class FinancialAlgothimBackend:
         url = "https://www.alphavantage.co/query?function=MACD&symbol={}&interval={}&series_type=open&apikey={}"
         MACD = requests.get(url=url.format(currency, self.frequency, self.public_api_keys)).json()
         if api_over(MACD):
-            MACD = reach_server(url.format(currency, self.frequency, str()))
+            MACD = reach_server(url.format(currency, self.frequency, str()), self.s)
             if api_over(MACD):
                     time.sleep(15)
                     return self.get_MACD(currency)
@@ -203,7 +201,7 @@ class FinancialAlgothimBackend:
         url= "https://www.alphavantage.co/query?function=ADX&symbol={}&interval={}&time_period=14&apikey={}"
         ADX = requests.get(url=url.format(currency, self.frequency, self.public_api_keys)).json()
         if api_over(ADX):
-            ADX = reach_server(url.format(currency, self.frequency, str()))
+            ADX = reach_server(url.format(currency, self.frequency, str()), self.s)
             if api_over(ADX):
                 time.sleep(15)
                 return self.is_range_ADX(currency)
@@ -222,7 +220,7 @@ class FinancialAlgothimBackend:
         url = "https://www.alphavantage.co/query?function=STOCH&symbol={}&interval={}&Slowkperiod=14&Slowdmatype=3&apikey={}"
         STOCHRSI = requests.get(url.format(currency, self.frequency, self.public_api_keys)).json()
         if api_over(STOCHRSI):
-            STOCHRSI = reach_server(url.format(currency, self.frequency, str()))
+            STOCHRSI = reach_server(url.format(currency, self.frequency, str()), self.s)
             if api_over(STOCHRSI):
                 time.sleep(15)
                 return self.get_STOCH(currency)
@@ -238,7 +236,7 @@ class FinancialAlgothimBackend:
         url = "https://www.alphavantage.co/query?function=SAR&symbol={}&interval={}&acceleration=0.05&maximum=0.25&apikey={}"
         SAR = requests.get(url.format(currency, self.frequency, self.public_api_keys)).json()
         if api_over(SAR):
-            SAR = reach_server(url.format(currency, self.frequency, str()))
+            SAR = reach_server(url.format(currency, self.frequency, str()), self.s)
             if api_over(SAR):
                 time.sleep(20)
                 return self.get_SAR(currency)
@@ -257,7 +255,7 @@ class FinancialAlgothimBackend:
         url = "https://www.alphavantage.co/query?function=MOM&symbol={}&interval={}&time_period=10&series_type=close&apikey={}"
         MOM = requests.get(url.format(currency, self.frequency, self.public_api_keys)).json()
         if api_over(MOM):
-            MOM = reach_server(url.format(currency, self.frequency, str()))
+            MOM = reach_server(url.format(currency, self.frequency, str()), self.s)
             if api_over(MOM):
                 time.sleep(15)
                 return self.get_info_MOMENTUM(currency, is_range, SAR_value)
@@ -293,7 +291,6 @@ class FinancialAlgothimBackend:
         :return:
         """
         print("Launching thread")
-        a = os.getcwd().split("\\")
         has_bought, has_sold = False, False
         price_entrance = float()
         while self.running_threads:
@@ -311,8 +308,6 @@ class FinancialAlgothimBackend:
                                                   coeff_STOCH_SAR(stoch_n_1, stoch_n, SAR_relatif, is_range),
                                                   self.get_MACD(market, is_range)))
                 socket_lock.release()
-                resume_file = open("{}\\result_files\\{}.txt".format('\\'.join(a[0:len(a) - 1]),
-                                                                    market), 'a+')
                 if not no_position:
                     if has_bought:
                         if buy_coeff <= self.necessary_value / 2:
@@ -326,23 +321,17 @@ class FinancialAlgothimBackend:
                             db.session.commit()
                             print("Buy left by {}".format(market))
                             has_bought = False
-                            resume_file.write("---- left at {} ---> result {}% \n".format(
-                                datetime.datetime.today().strftime("%d/%m/%y %H:%M"),
-                                100 * (current_price - price_entrance) / price_entrance))
                     elif has_sold:
-                        position_to_leave = Position.query.filter(market==market).last()
-                        date = datetime.datetime.now()
-                        position_to_leave.dayout_market = datetime.date.today()
-                        position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
-                                                                            second=date.second)
-                        position_to_leave.result_percent = -100 *(current_price - price_entrance)/ price_entrance
-                        db.session.commit()
                         if sell_coeff <= self.necessary_value / 2:
+                            position_to_leave = Position.query.filter(market == market).last()
+                            date = datetime.datetime.now()
+                            position_to_leave.dayout_market = datetime.date.today()
+                            position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
+                                                                             second=date.second)
+                            position_to_leave.result_percent = -100 * (current_price - price_entrance) / price_entrance
+                            db.session.commit()
                             print("Sold left by {}".format(market))
                             has_sold = False
-                            resume_file.write("---- left at {} ---> result {}% \n".format(
-                                datetime.datetime.today().strftime("%d/%m/%y %H:%M"),
-                                100 * (price_entrance - current_price) / price_entrance))
                 else:
                     if buy_coeff >= self.necessary_value:
                         position = Position(
@@ -354,8 +343,6 @@ class FinancialAlgothimBackend:
                         db.session.add(position)
                         db.session.commit()
                         has_bought = True
-                        resume_file.write("++ Position taken at {} ".format(datetime.datetime.today().strftime("%d/%m/%y %H:%M")))
-                        price_entrance = current_price
                     # might need an id as a global value with a mutex (same thing for the interaction with the db_session)
                     elif sell_coeff >= self.necessary_value:
 
@@ -369,17 +356,14 @@ class FinancialAlgothimBackend:
                         db.session.commit()
                         print("Sell taken by {}".format(market))
                         has_sold = True
-                        resume_file.write("-- Position taken at: {} ".format(datetime.datetime.today().strftime("%d/%m/%y %H:%M")))
-                        price_entrance = current_price
 
-                resume_file.close()
                 time.sleep(15*60) #wait 15 minutes
             else:
                 print("Erreur")
                 os.close(-1)
         print("Fermeture du marché")
 
-    def end_market(self, droplet_id):
+    def end_market(self, droplet_id, s):
         """
         remove droplet
         :return: nothing
@@ -392,7 +376,15 @@ class FinancialAlgothimBackend:
         while True:
             while True:
                 date = datetime.datetime.now()
-                if date.hour >= 0 and date.hour < 17 :
+                if date.hour >= 0 and date.hour < 23 :
+                    position = Position(
+                        position_type="S",
+                        market="EURUSD",
+                        stepin_market=datetime.datetime.today(),
+                        stepin_value=1.2345,
+                    )
+                    db.session.add(position)
+                    db.session.commit()
                     print("London opens...")
                     ip, droplet_id = self.create_droplet_and_get_ip()
                     time.sleep(60)
@@ -400,8 +392,8 @@ class FinancialAlgothimBackend:
                     while True:
                         time.sleep(15)
                         try:
-                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                            s.connect((ip,self.port))
+                            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            self.s.connect((ip,self.port))
                             print("Connection created properly")
                             break
                         except socket.error:
@@ -431,7 +423,7 @@ class FinancialAlgothimBackend:
             time.sleep(to_wait)
             self.running_threads = False
             for t in all_threads: t.join()
-            self.end_market(droplet_id)
+            self.end_market(droplet_id, self.s)
             print('End of the day at : {}'.format(datetime.datetime.today().strftime("%d/%m/%y %H:%M")))
 
 

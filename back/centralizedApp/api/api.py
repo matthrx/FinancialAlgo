@@ -1,9 +1,8 @@
-from flask import Flask
 from flask_restful import Api
-from centralizedApp.api.resource import *
-from centralizedApp.algorithm import FinancialAlgothimBackend
+from back.centralizedApp.api.resource import *
+from back.centralizedApp.algorithm import FinancialAlgothimBackend
 import threading
-from centralizedApp.api.config import db, app
+from back.centralizedApp.api.config import db, app
 
 # Never put two Flask(__name__)
 api = Api(app)
@@ -20,5 +19,6 @@ if __name__ == "__main__":
         db.create_all()
     except:
         pass
-    threading.Thread(target=run_algorithm).start()
-    app.run(debug=True, port=8000)
+    thread = threading.Thread(target=run_algorithm)
+    thread.start()
+    app.run(debug=False, port=8000)
