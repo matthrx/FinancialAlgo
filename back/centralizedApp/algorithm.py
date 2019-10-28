@@ -314,7 +314,7 @@ class FinancialAlgothimBackend:
                             position_to_leave = Position.query.filter(market==market).last()
                             date = datetime.datetime.now()
 
-                            position_to_leave.dayout_market = datetime.date.today()
+                            position_to_leave.dayout_market = datetime.datetime.now().date()
                             position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
                                                                                 second=date.second)
                             position_to_leave.result_percent = 100*(current_price - price_entrance)/price_entrance
@@ -325,7 +325,7 @@ class FinancialAlgothimBackend:
                         if sell_coeff <= self.necessary_value / 2:
                             position_to_leave = Position.query.filter(market == market).last()
                             date = datetime.datetime.now()
-                            position_to_leave.dayout_market = datetime.date.today()
+                            position_to_leave.dayout_market = datetime.datetime.now().date()
                             position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
                                                                              second=date.second)
                             position_to_leave.result_percent = -100 * (current_price - price_entrance) / price_entrance
@@ -339,6 +339,7 @@ class FinancialAlgothimBackend:
                             market=market,
                             stepin_market= datetime.datetime.today(),
                             stepin_value=current_price,
+
                         )
                         db.session.add(position)
                         db.session.commit()
@@ -373,18 +374,14 @@ class FinancialAlgothimBackend:
 
 
     def run(self):
+        final_market = str()
+        for m in self.markets:
+            final_market += ";"
+
         while True:
             while True:
                 date = datetime.datetime.now()
-                if date.hour >= 0 and date.hour < 23 :
-                    position = Position(
-                        position_type="S",
-                        market="EURUSD",
-                        stepin_market=datetime.datetime.today(),
-                        stepin_value=1.2345,
-                    )
-                    db.session.add(position)
-                    db.session.commit()
+                if date.hour >= 0 and date.hour < 17 :
                     print("London opens...")
                     ip, droplet_id = self.create_droplet_and_get_ip()
                     time.sleep(60)
@@ -416,7 +413,7 @@ class FinancialAlgothimBackend:
                     break
                 else:
                     print("Waiting for the market to open")
-                    time.sleep(2*60)
+                    time.sleep(10*60)
             delta_t = datetime.time(17-date.hour, 59-date.minute, 59-date.second)
             to_wait = (datetime.datetime.combine(datetime.date.min, delta_t) - datetime.datetime.min).total_seconds()
             print(to_wait)
