@@ -8,11 +8,9 @@ class App extends Component {
 
     constructor(props) {
         super(props);
-        this.r = axios.create()
+        this.r = axios.create();
         this.r.defaults.baseURL = "http://127.0.0.1:8000"
-        // this.r.defaults.headers = {
-        //     "Access-Control-Allow-Origin": "*"
-        // }
+
     }
 
     render() {

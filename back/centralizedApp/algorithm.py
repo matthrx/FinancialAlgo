@@ -314,9 +314,8 @@ class FinancialAlgothimBackend:
                             position_to_leave = Position.query.filter(market==market).last()
                             date = datetime.datetime.now()
 
-                            position_to_leave.dayout_market = datetime.datetime.now().date()
-                            position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
-                                                                                second=date.second)
+                            position_to_leave.dayout_market = "{}-{}-{}".format(date.year, date.month, date.day)
+                            position_to_leave.timeout_market = "{}:{}:{}".format(date.hour, date.minute, date.second)
                             position_to_leave.result_percent = 100*(current_price - price_entrance)/price_entrance
                             db.session.commit()
                             print("Buy left by {}".format(market))
@@ -325,9 +324,8 @@ class FinancialAlgothimBackend:
                         if sell_coeff <= self.necessary_value / 2:
                             position_to_leave = Position.query.filter(market == market).last()
                             date = datetime.datetime.now()
-                            position_to_leave.dayout_market = datetime.datetime.now().date()
-                            position_to_leave.timeout_market = datetime.time(hour=date.hour, minute=date.minute,
-                                                                             second=date.second)
+                            position_to_leave.dayout_market = "{}-{}-{}".format(date.year, date.month, date.day)
+                            position_to_leave.timeout_market = "{}:{}:{}".format(date.hour, date.minute, date.second)
                             position_to_leave.result_percent = -100 * (current_price - price_entrance) / price_entrance
                             db.session.commit()
                             print("Sold left by {}".format(market))
@@ -355,7 +353,6 @@ class FinancialAlgothimBackend:
                         )
                         db.session.add(position)
                         db.session.commit()
-                        print("Sell taken by {}".format(market))
                         has_sold = True
 
                 time.sleep(15*60) #wait 15 minutes

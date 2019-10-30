@@ -23,14 +23,17 @@ if __name__ == "__main__":
         pass
     # thread = threading.Thread(target=run_algorithm)
     # thread.start()
-    # import datetime
-    # p = Position(
-    #     market="EURGBP",
-    #     stepin_value=1.25,
-    #     stepin_market= datetime.datetime.now(),
-    #     position_type='S'
-    #
-    # )
-    # db.session.add(p)
-    # db.session.commit()
+    import datetime
+    p = Position(
+        market="AUDUSD",
+        stepin_value=0.234,
+        stepin_market= datetime.datetime.now(),
+        position_type='B',
+        dayout_market='2019-08-12',
+        timeout_market='21:32:12',
+        result_percent=0.2345
+
+    )
+    db.session.add(p)
+    db.session.commit()
     app.run(debug=False, port=8000)
