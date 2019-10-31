@@ -61,6 +61,9 @@ class SpecificMarket extends Component{
                                 "market_data" : res.data
                             })
                         })
+            .catch(
+                () => {window.location = window.location.origin}
+            )
     };
 
 

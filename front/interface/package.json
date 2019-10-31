@@ -3,14 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@material-ui/core": "^4.5.2",
+    "@material-ui/icons": "^4.5.1",
     "animejs": "^3.1.0",
     "axios": "^0.19.0",
     "bootstrap": "^4.3.1",
+    "clsx": "^1.0.4",
     "react": "^16.11.0",
     "react-bootstrap": "^1.0.0-beta.14",
     "react-dom": "^16.11.0",
     "react-icons": "^3.8.0",
-    "react-scripts": "3.2.0"
+    "react-router-dom": "^5.1.2",
+    "react-scripts": "3.2.0",
+    "reshake": "^1.2.1"
   },
   "scripts": {
     "start": "react-scripts start",

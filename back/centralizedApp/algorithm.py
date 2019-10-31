@@ -57,7 +57,7 @@ def initialize_proxy(dest):
         _, stdout, _ = ssh.exec_command("git clone {}".format(github_repositoy))
         clone_status = stdout.channel.recv_exit_status()
         if clone_status == 0:
-            _, _, _ = ssh.exec_command("sh FinancialAlgo/proxy/server_config.sh")
+            _, _, _ = ssh.exec_command("sh FinancialAlgo/back/proxy/server_config.sh")
         else:
             print("Clone impossible")
             os.error()

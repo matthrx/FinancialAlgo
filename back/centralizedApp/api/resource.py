@@ -1,11 +1,13 @@
-from back.centralizedApp.api.models import Position
-from flask import Response
-from back.centralizedApp.api.config import db
+from back.centralizedApp.api.models import Position, User
+from back.centralizedApp.api.config import app
+from functools import wraps
 from flask_restful import reqparse
 from flask_restful import abort
 from flask_restful import fields
 from flask_restful import Resource
 from flask_restful import marshal_with
+from flask import request
+import jwt
 from sqlalchemy import func
 
 
@@ -41,8 +43,34 @@ parser_response.add_argument('dayout_market')
 parser_response.add_argument('timeout_market')
 parser_response.add_argument('result_percent')
 
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        print(request.headers);
+        if 'x-access-token' in request.headers:
+            token = request.headers["x-access-token"]
+            print(token)
+            if not token:
+                return {"error" : "Token is missing"},401
+            try:
+                data = jwt.decode(token, app.config["SECRET_KEY"])
+                print(data)
+                _ = User.query.filter_by(id=data['id']).first()
+            except:
+                return {"error" : "Token not found"}, 401
+
+            return f(*args, **kwargs)
+        else:
+            return {"error" :"Not appropriate headers"}, 401
+
+    return decorated
+
+
 class CurrentPosition(Resource):
 
+    @token_required
     @marshal_with(json_response) # necessary to data
     def get(self):
         current_pos = Position.query.filter_by(timeout_market=None).all()
@@ -50,6 +78,7 @@ class CurrentPosition(Resource):
 
 class PositionSpecificMarket(Resource):
 
+    @token_required
     @marshal_with(json_response)
     def get(self, market):
         specfic_market = Position.query.filter(Position.market==market)\
@@ -60,17 +89,9 @@ class PositionSpecificMarket(Resource):
             return specfic_market, 200
 
 
-class PositionResultsPerDay(Resource):
-
-    def get(self):
-        per_day_data = Position.query.with_entities(Position.dayout_market, func.sum(Position.result_percent))\
-            .group_by(Position.dayout_market).order_by(func.max(Position.id).desc()).limit(10).all()
-        per_day_data.reverse()
-        return per_day_data, 200
-
-
 class HistoricalPositions(Resource):
 
+    @token_required
     @marshal_with(json_response)
     def get(self):
         historical_positions = Position.query.filter(Position.dayout_market != None)\
@@ -86,7 +107,8 @@ class HistoricalPositions(Resource):
 #         return Response(status=200)
 
 class ListAllMarkets(Resource):
-
+    @token_required
     def get(self):
         all_markets = [p.market for p in Position.query.group_by(Position.market).all()]
         return all_markets, 200
+

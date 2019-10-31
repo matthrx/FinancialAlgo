@@ -19,6 +19,11 @@ class Historical extends Component{
                     });
                 }
             )
+            .catch(
+                () => {
+                    window.location = window.location.origin
+                }
+            )
     }
 
 

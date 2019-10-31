@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 
 
 project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +12,7 @@ CORS(app)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_file
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = "PVO^;54B!ez6YiOdYhl1WeZHp-HXeN96"
 
 db = SQLAlchemy(app)
 db.create_all()

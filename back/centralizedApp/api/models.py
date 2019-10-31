@@ -1,5 +1,7 @@
 from back.centralizedApp.api.config import db
 
+from .config import app
+
 class Position(db.Model):
     __tablename__ = "position"
 
@@ -11,4 +13,11 @@ class Position(db.Model):
     timeout_market = db.Column(db.String, default=None)
     stepin_value = db.Column(db.Float(precision='3,8'))
     result_percent = db.Column(db.Float(precision='2,4'), default=0.0)
+
+
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.String(32), primary_key = True)
+    username = db.Column(db.String(32), index = True)
+    password_hash = db.Column(db.String(128))
 
